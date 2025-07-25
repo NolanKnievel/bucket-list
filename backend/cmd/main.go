@@ -2,6 +2,7 @@ package main
 
 import (
 	"collaborative-bucket-list/internal/middleware"
+	"collaborative-bucket-list/pkg/database"
 	"log"
 	"os"
 	"strings"
@@ -15,6 +16,18 @@ func main() {
 	// Load environment variables from .env file
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using system environment variables")
+	}
+
+	// Initialize database connection
+	dbConfig := database.LoadConfigFromEnv()
+	if err := database.Connect(dbConfig); err != nil {
+		log.Fatal("Failed to connect to database:", err)
+	}
+	defer database.Close()
+
+	// Run database migrations
+	if err := database.RunMigrations("migrations"); err != nil {
+		log.Fatal("Failed to run database migrations:", err)
 	}
 
 	// Set up Gin router
@@ -34,9 +47,20 @@ func main() {
 
 	// Basic health check endpoint
 	r.GET("/health", func(c *gin.Context) {
+		// Check database health
+		if err := database.HealthCheck(); err != nil {
+			c.JSON(503, gin.H{
+				"status": "error",
+				"message": "Database health check failed",
+				"error": err.Error(),
+			})
+			return
+		}
+
 		c.JSON(200, gin.H{
 			"status": "ok",
 			"message": "Collaborative Bucket List API is running",
+			"database": "connected",
 		})
 	})
 
