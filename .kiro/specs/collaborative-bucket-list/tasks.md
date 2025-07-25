@@ -25,7 +25,7 @@
   - _Requirements: 1.1, 1.6, 6.2_
 
 - [ ] 3. Create database layer and migrations
-- [ ] 3.1 Set up PostgreSQL database schema
+- [x] 3.1 Set up PostgreSQL database schema
 
   - Write SQL migration files for groups, members, and bucket_items tables
   - Create database indexes for performance optimization
