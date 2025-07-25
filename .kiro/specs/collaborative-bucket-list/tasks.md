@@ -9,7 +9,7 @@
   - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1_
 
 - [ ] 2. Implement data models and validation
-- [ ] 2.1 Create core data model interfaces and types
+- [x] 2.1 Create core data model interfaces and types
 
   - Write TypeScript interfaces for Group, Member, BucketListItem, and GroupWithDetails
   - Write Go structs with proper JSON and database tags for all data models
