@@ -37,6 +37,7 @@ func main() {
 
 	// Initialize handlers
 	groupHandler := handlers.NewGroupHandler(repoManager)
+	bucketItemHandler := handlers.NewBucketItemHandler(repoManager)
 
 	// Set up Gin router
 	r := gin.Default()
@@ -91,9 +92,10 @@ func main() {
 		})
 	})
 
-	// Group management endpoints
+	// API endpoints
 	api := r.Group("/api")
 	{
+		// Group management endpoints
 		// POST /api/groups - Create new group (requires authentication)
 		api.POST("/groups", middleware.AuthMiddleware(), groupHandler.CreateGroup)
 		
@@ -103,8 +105,15 @@ func main() {
 		// POST /api/groups/:id/join - Join existing group
 		api.POST("/groups/:id/join", groupHandler.JoinGroup)
 		
+		// POST /api/groups/:id/items - Add new bucket list item
+		api.POST("/groups/:id/items", bucketItemHandler.CreateItem)
+		
 		// GET /api/users/groups - Get user's groups (requires authentication)
 		api.GET("/users/groups", middleware.AuthMiddleware(), groupHandler.GetUserGroups)
+		
+		// Bucket list item endpoints
+		// PATCH /api/items/:id/complete - Toggle item completion status
+		api.PATCH("/items/:id/complete", bucketItemHandler.ToggleCompletion)
 	}
 
 	// Get port from environment or default to 8080
