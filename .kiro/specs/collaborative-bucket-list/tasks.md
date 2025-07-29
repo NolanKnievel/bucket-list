@@ -41,7 +41,7 @@
   - _Requirements: 1.2, 1.3, 2.3, 3.5, 4.1, 5.3_
 
 - [ ] 4. Build core backend API endpoints
-- [ ] 4.1 Implement group management endpoints
+- [x] 4.1 Implement group management endpoints
 
   - Create POST /api/groups endpoint for authenticated group creation
   - Implement GET /api/groups/:id endpoint for group details retrieval
