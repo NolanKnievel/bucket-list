@@ -1,7 +1,9 @@
 package main
 
 import (
+	"collaborative-bucket-list/internal/handlers"
 	"collaborative-bucket-list/internal/middleware"
+	"collaborative-bucket-list/internal/repositories"
 	"collaborative-bucket-list/pkg/database"
 	"log"
 	"os"
@@ -29,6 +31,12 @@ func main() {
 	if err := database.RunMigrations("migrations"); err != nil {
 		log.Fatal("Failed to run database migrations:", err)
 	}
+
+	// Initialize repository manager
+	repoManager := repositories.NewPostgresRepositoryManager(database.DB)
+
+	// Initialize handlers
+	groupHandler := handlers.NewGroupHandler(repoManager)
 
 	// Set up Gin router
 	r := gin.Default()
@@ -82,6 +90,19 @@ func main() {
 			"valid": true,
 		})
 	})
+
+	// Group management endpoints
+	api := r.Group("/api")
+	{
+		// POST /api/groups - Create new group (requires authentication)
+		api.POST("/groups", middleware.AuthMiddleware(), groupHandler.CreateGroup)
+		
+		// GET /api/groups/:id - Get group details
+		api.GET("/groups/:id", groupHandler.GetGroup)
+		
+		// GET /api/users/groups - Get user's groups (requires authentication)
+		api.GET("/users/groups", middleware.AuthMiddleware(), groupHandler.GetUserGroups)
+	}
 
 	// Get port from environment or default to 8080
 	port := os.Getenv("PORT")
