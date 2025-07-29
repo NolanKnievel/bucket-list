@@ -49,7 +49,7 @@
   - Write middleware for authentication and request validation
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 4.1, 5.1_
 
-- [ ] 4.2 Implement group joining and member management
+- [x] 4.2 Implement group joining and member management
 
   - Create POST /api/groups/:id/join endpoint for adding members to groups
   - Implement member validation and duplicate prevention logic
