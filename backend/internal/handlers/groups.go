@@ -201,6 +201,140 @@ func (h *GroupHandler) GetUserGroups(c *gin.Context) {
 	})
 }
 
+// JoinGroup handles POST /api/groups/:id/join
+func (h *GroupHandler) JoinGroup(c *gin.Context) {
+	groupID := c.Param("id")
+	if groupID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "MISSING_GROUP_ID",
+				"message": "Group ID is required",
+			},
+		})
+		return
+	}
+
+	// Validate UUID format
+	validation := models.ValidateUUID(groupID)
+	if !validation.IsValid {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_GROUP_ID",
+				"message": "Invalid group ID format",
+				"details": validation.Errors,
+			},
+		})
+		return
+	}
+
+	var req models.JoinGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_REQUEST_BODY",
+				"message": "Invalid request body",
+				"details": err.Error(),
+			},
+		})
+		return
+	}
+
+	// Sanitize input
+	req.Sanitize()
+
+	// Validate request
+	validation = req.Validate()
+	if !validation.IsValid {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "Request validation failed",
+				"details": validation.Errors,
+			},
+		})
+		return
+	}
+
+	// Check if group exists
+	_, err := h.repos.Groups().GetByID(c.Request.Context(), groupID)
+	if err != nil {
+		if err.Error() == fmt.Sprintf("group not found: %s", groupID) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": gin.H{
+					"code":    "GROUP_NOT_FOUND",
+					"message": "Group not found",
+				},
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"code":    "GROUP_RETRIEVAL_FAILED",
+				"message": "Failed to retrieve group",
+				"details": err.Error(),
+			},
+		})
+		return
+	}
+
+	// Handle authenticated vs anonymous users
+	var userID *string
+	if req.UserID != nil && *req.UserID != "" {
+		userID = req.UserID
+		
+		// Check if authenticated user is already a member
+		exists, err := h.repos.Members().ExistsByGroupAndUser(c.Request.Context(), groupID, *userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": gin.H{
+					"code":    "MEMBERSHIP_CHECK_FAILED",
+					"message": "Failed to check existing membership",
+					"details": err.Error(),
+				},
+			})
+			return
+		}
+
+		if exists {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": gin.H{
+					"code":    "ALREADY_MEMBER",
+					"message": "User is already a member of this group",
+				},
+			})
+			return
+		}
+	}
+
+	// Create new member
+	member := &models.Member{
+		ID:        uuid.New().String(),
+		GroupID:   groupID,
+		UserID:    userID,
+		Name:      req.MemberName,
+		JoinedAt:  time.Now(),
+		IsCreator: false,
+	}
+
+	// Create member in database
+	if err := h.repos.Members().Create(c.Request.Context(), member); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"code":    "MEMBER_CREATION_FAILED",
+				"message": "Failed to add member to group",
+				"details": err.Error(),
+			},
+		})
+		return
+	}
+
+	// Return created member
+	c.JSON(http.StatusCreated, gin.H{
+		"member": member,
+	})
+}
+
 // getBaseURL extracts the base URL from the request
 func getBaseURL(c *gin.Context) string {
 	scheme := "http"

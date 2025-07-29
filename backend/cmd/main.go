@@ -100,6 +100,9 @@ func main() {
 		// GET /api/groups/:id - Get group details
 		api.GET("/groups/:id", groupHandler.GetGroup)
 		
+		// POST /api/groups/:id/join - Join existing group
+		api.POST("/groups/:id/join", groupHandler.JoinGroup)
+		
 		// GET /api/users/groups - Get user's groups (requires authentication)
 		api.GET("/users/groups", middleware.AuthMiddleware(), groupHandler.GetUserGroups)
 	}
