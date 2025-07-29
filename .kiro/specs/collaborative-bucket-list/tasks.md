@@ -56,7 +56,7 @@
   - Write functions to handle both authenticated and anonymous member joining
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 5.3, 5.4_
 
-- [ ] 4.3 Implement bucket list item endpoints
+- [x] 4.3 Implement bucket list item endpoints
 
   - Create POST /api/groups/:id/items endpoint for adding new items
   - Implement PATCH /api/items/:id/complete endpoint for toggling completion status
