@@ -80,7 +80,7 @@
   - _Requirements: 3.4, 5.4, 6.3, 6.4_
 
 - [ ] 6. Build frontend authentication and routing
-- [ ] 6.1 Create authentication components and routing
+- [x] 6.1 Create authentication components and routing
 
   - Implement App component with React Router and authentication context
   - Create HomePage component with sign-in/sign-up functionality using Supabase Auth
