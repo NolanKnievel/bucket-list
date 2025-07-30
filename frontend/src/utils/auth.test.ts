@@ -11,12 +11,7 @@ vi.mock("../lib/supabase", () => ({
   },
 }));
 
-import {
-  getAuthToken,
-  isAuthenticated,
-  getCurrentUser,
-  createAuthHeaders,
-} from "./auth";
+import { getAuthToken, isAuthenticated, createAuthHeaders } from "./auth";
 import { supabase } from "../lib/supabase";
 
 const mockSupabase = supabase as any;
