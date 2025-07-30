@@ -1,27 +1,37 @@
+import React from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
-import { AuthForm } from "./components/AuthForm";
-import { BackendTest } from "./components/BackendTest";
+import { HomePage } from "./components/HomePage";
+import { Dashboard } from "./components/Dashboard";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function App() {
   return (
     <AuthProvider>
-      <div className="min-h-screen bg-gray-50">
-        <div className="container mx-auto px-4 py-8">
-          <header className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              Collaborative Bucket List
-            </h1>
-            <p className="text-lg text-gray-600">
-              Authentication System Testing
-            </p>
-          </header>
+      <Router>
+        <Routes>
+          {/* Public route - Home page with authentication */}
+          <Route path="/" element={<HomePage />} />
 
-          <main className="max-w-4xl mx-auto space-y-6">
-            <AuthForm />
-            <BackendTest />
-          </main>
-        </div>
-      </div>
+          {/* Protected routes - require authentication */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Catch all route - redirect to home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Router>
     </AuthProvider>
   );
 }
