@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { GroupCard } from "./GroupCard";
 import { GroupSummary } from "../types";
 import { apiService, ApiError } from "../utils/api";
 
 export const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,8 +44,7 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleCreateGroup = () => {
-    // TODO: Navigate to create group form - will be implemented in future tasks
-    console.log("Navigate to create group");
+    navigate("/create-group");
   };
 
   return (

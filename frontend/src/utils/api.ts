@@ -1,4 +1,4 @@
-import { GroupSummary } from "../types";
+import { GroupSummary, CreateGroupRequest, Group } from "../types";
 import { supabase } from "../lib/supabase";
 
 const API_BASE_URL =
@@ -75,6 +75,29 @@ export const apiService = {
         throw error;
       }
       throw new ApiError("NETWORK_ERROR", "Failed to fetch user groups");
+    }
+  },
+
+  async createGroup(
+    request: CreateGroupRequest
+  ): Promise<Group & { shareLink: string }> {
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/groups`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(request),
+      });
+
+      const data = await handleResponse<Group & { shareLink: string }>(
+        response
+      );
+      return data;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError("NETWORK_ERROR", "Failed to create group");
     }
   },
 };

@@ -7,6 +7,7 @@ import {
 import { AuthProvider } from "./contexts/AuthContext";
 import { HomePage } from "./components/HomePage";
 import { Dashboard } from "./components/Dashboard";
+import { CreateGroupPage } from "./components/CreateGroupPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function App() {
@@ -23,6 +24,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/create-group"
+            element={
+              <ProtectedRoute>
+                <CreateGroupPage />
               </ProtectedRoute>
             }
           />
