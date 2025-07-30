@@ -88,7 +88,7 @@
   - Write authentication state management and persistence
   - _Requirements: 1.1, 6.1, 6.2_
 
-- [ ] 6.2 Implement user dashboard for multiple groups
+- [x] 6.2 Implement user dashboard for multiple groups
 
   - Create Dashboard component displaying all user's groups
   - Implement GroupCard component showing group summary with progress indicators
