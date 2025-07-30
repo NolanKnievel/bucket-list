@@ -97,7 +97,7 @@
   - _Requirements: 1.1, 4.1, 5.1, 8.1, 8.4_
 
 - [ ] 7. Build group creation and joining functionality
-- [ ] 7.1 Implement group creation workflow
+- [x] 7.1 Implement group creation workflow
 
   - Create CreateGroupForm component with name and optional deadline inputs
   - Implement form validation and submission with API integration
