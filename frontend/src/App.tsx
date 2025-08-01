@@ -8,6 +8,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { HomePage } from "./components/HomePage";
 import { Dashboard } from "./components/Dashboard";
 import { CreateGroupPage } from "./components/CreateGroupPage";
+import { JoinGroupForm } from "./components/JoinGroupForm";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function App() {
@@ -35,6 +36,9 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* Public route - Join group via shared link */}
+          <Route path="/groups/:groupId" element={<JoinGroupForm />} />
 
           {/* Catch all route - redirect to home */}
           <Route path="*" element={<Navigate to="/" replace />} />

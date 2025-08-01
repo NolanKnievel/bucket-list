@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"collaborative-bucket-list/internal/middleware"
@@ -108,7 +109,7 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 	}
 
 	// Generate shareable link
-	shareLink := fmt.Sprintf("%s/groups/%s", getBaseURL(c), group.ID)
+	shareLink := fmt.Sprintf("%s/groups/%s", getFrontendURL(), group.ID)
 
 	// Return created group with share link
 	response := gin.H{
@@ -348,4 +349,14 @@ func getBaseURL(c *gin.Context) string {
 	}
 	
 	return fmt.Sprintf("%s://%s", scheme, host)
+}
+
+// getFrontendURL returns the frontend URL from environment variable
+func getFrontendURL() string {
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		// Default to localhost:3000 if not set
+		frontendURL = "http://localhost:3000"
+	}
+	return frontendURL
 }

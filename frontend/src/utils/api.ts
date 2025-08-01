@@ -1,4 +1,11 @@
-import { GroupSummary, CreateGroupRequest, Group } from "../types";
+import {
+  GroupSummary,
+  CreateGroupRequest,
+  Group,
+  GroupWithDetails,
+  JoinGroupRequest,
+  Member,
+} from "../types";
 import { supabase } from "../lib/supabase";
 
 const API_BASE_URL =
@@ -98,6 +105,55 @@ export const apiService = {
         throw error;
       }
       throw new ApiError("NETWORK_ERROR", "Failed to create group");
+    }
+  },
+
+  async getGroup(groupId: string): Promise<GroupWithDetails> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/groups/${groupId}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await handleResponse<GroupWithDetails>(response);
+      return data;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError("NETWORK_ERROR", "Failed to fetch group details");
+    }
+  },
+
+  async joinGroup(groupId: string, request: JoinGroupRequest): Promise<Member> {
+    try {
+      // Get current user if authenticated
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const requestBody = {
+        ...request,
+        userId: session?.user?.id || undefined,
+      };
+
+      const response = await fetch(`${API_BASE_URL}/groups/${groupId}/join`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const data = await handleResponse<{ member: Member }>(response);
+      return data.member;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError("NETWORK_ERROR", "Failed to join group");
     }
   },
 };
