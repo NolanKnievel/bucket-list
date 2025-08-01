@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiService, ApiError } from "../utils/api";
-import { GroupWithDetails } from "../types";
+import { GroupWithDetails, BucketListItem } from "../types";
 import { MembersList } from "./MembersList";
 import { ProgressBar } from "./ProgressBar";
 import { CountdownTimer } from "./CountdownTimer";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { BucketListItem as BucketListItemComponent } from "./BucketListItem";
+import { AddItemForm } from "./AddItemForm";
 import { useAuth } from "../contexts/AuthContext";
 
 export const GroupView: React.FC = () => {
@@ -17,6 +18,7 @@ export const GroupView: React.FC = () => {
   const [group, setGroup] = useState<GroupWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   useEffect(() => {
     const loadGroup = async () => {
@@ -113,6 +115,21 @@ export const GroupView: React.FC = () => {
       console.error("Failed to toggle item completion:", error);
       throw error;
     }
+  };
+
+  // Handle adding new item
+  const handleItemAdded = (newItem: BucketListItem) => {
+    setGroup((prevGroup) => {
+      if (!prevGroup) return prevGroup;
+
+      return {
+        ...prevGroup,
+        items: [newItem, ...prevGroup.items], // Add new item at the beginning
+      };
+    });
+
+    // Hide the form after successful addition
+    setShowAddForm(false);
   };
 
   console.log(
@@ -340,11 +357,47 @@ export const GroupView: React.FC = () => {
             {/* Bucket List Items */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-lg shadow-sm p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                  Bucket List
-                </h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Bucket List
+                  </h2>
+                  {getCurrentMemberId() && !showAddForm && (
+                    <button
+                      onClick={() => setShowAddForm(true)}
+                      className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 flex items-center"
+                    >
+                      <svg
+                        className="h-4 w-4 mr-2"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 4v16m8-8H4"
+                        />
+                      </svg>
+                      Add Item
+                    </button>
+                  )}
+                </div>
+
+                {/* Add Item Form */}
+                {showAddForm && getCurrentMemberId() && (
+                  <ErrorBoundary>
+                    <AddItemForm
+                      groupId={group.id}
+                      memberId={getCurrentMemberId()!}
+                      onItemAdded={handleItemAdded}
+                      onCancel={() => setShowAddForm(false)}
+                    />
+                  </ErrorBoundary>
+                )}
+
                 <ErrorBoundary>
-                  {items.length === 0 ? (
+                  {items.length === 0 && !showAddForm ? (
                     <div className="text-center py-12">
                       <svg
                         className="mx-auto h-12 w-12 text-gray-400 mb-4"
