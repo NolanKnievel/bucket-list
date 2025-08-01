@@ -105,7 +105,7 @@
   - Add success feedback and navigation to created group
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 7.5_
 
-- [ ] 7.2 Implement group joining via shared links
+- [x] 7.2 Implement group joining via shared links
 
   - Create JoinGroupForm component for name entry when accessing shared links
   - Implement URL parameter parsing for group ID extraction
