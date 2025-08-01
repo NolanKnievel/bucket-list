@@ -114,7 +114,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
 - [ ] 8. Build main group interface and bucket list functionality
-- [ ] 8.1 Create GroupView component layout
+- [x] 8.1 Create GroupView component layout
 
   - Implement main GroupView component with responsive layout
   - Create MembersList component displaying all group members with creator indication
