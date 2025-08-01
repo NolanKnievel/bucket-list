@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 
 interface CountdownTimerProps {
   deadline: string;
+  createdAt?: string; // When the group was created to calculate elapsed time
   onExpired?: () => void;
 }
 
@@ -15,6 +16,7 @@ interface TimeRemaining {
 
 export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   deadline,
+  createdAt,
   onExpired,
 }) => {
   const [timeRemaining, setTimeRemaining] = useState<TimeRemaining>({
@@ -95,7 +97,11 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   const calculateElapsedPercentage = () => {
     const now = new Date().getTime();
     const deadlineTime = new Date(deadline).getTime();
-    const createdTime = deadlineTime - 30 * 24 * 60 * 60 * 1000; // Assume 30 days total for demo
+
+    // Use actual creation time if provided, otherwise assume created 30 days ago as fallback
+    const createdTime = createdAt
+      ? new Date(createdAt).getTime()
+      : deadlineTime - 30 * 24 * 60 * 60 * 1000;
 
     const totalDuration = deadlineTime - createdTime;
     const elapsed = now - createdTime;
@@ -122,7 +128,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   return (
     <div className="text-center">
       {/* Time Display */}
-      <div className={`grid grid-cols-4 gap-2 mb-4 ${getUrgencyColor()}`}>
+      <div className={`grid grid-cols-3 gap-4 mb-4 ${getUrgencyColor()}`}>
         <div className="text-center">
           <div className="text-2xl font-bold">
             {timeRemaining.days.toString().padStart(2, "0")}
@@ -145,14 +151,6 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
           </div>
           <div className="text-xs uppercase tracking-wide">
             Min{timeRemaining.minutes !== 1 ? "s" : ""}
-          </div>
-        </div>
-        <div className="text-center">
-          <div className="text-2xl font-bold">
-            {timeRemaining.seconds.toString().padStart(2, "0")}
-          </div>
-          <div className="text-xs uppercase tracking-wide">
-            Sec{timeRemaining.seconds !== 1 ? "s" : ""}
           </div>
         </div>
       </div>

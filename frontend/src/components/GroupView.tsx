@@ -289,7 +289,10 @@ export const GroupView: React.FC = () => {
                     Time Remaining
                   </h3>
                   <ErrorBoundary>
-                    <CountdownTimer deadline={group.deadline} />
+                    <CountdownTimer
+                      deadline={group.deadline}
+                      createdAt={group.createdAt}
+                    />
                   </ErrorBoundary>
                 </div>
               )}
