@@ -9,6 +9,7 @@ import { HomePage } from "./components/HomePage";
 import { Dashboard } from "./components/Dashboard";
 import { CreateGroupPage } from "./components/CreateGroupPage";
 import { JoinGroupForm } from "./components/JoinGroupForm";
+import { GroupView } from "./components/GroupView";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function App() {
@@ -37,8 +38,9 @@ function App() {
             }
           />
 
-          {/* Public route - Join group via shared link */}
-          <Route path="/groups/:groupId" element={<JoinGroupForm />} />
+          {/* Public routes - Group access */}
+          <Route path="/groups/:groupId/join" element={<JoinGroupForm />} />
+          <Route path="/groups/:groupId" element={<GroupView />} />
 
           {/* Catch all route - redirect to home */}
           <Route path="*" element={<Navigate to="/" replace />} />

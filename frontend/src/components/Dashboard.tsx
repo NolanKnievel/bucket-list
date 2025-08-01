@@ -39,8 +39,7 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleViewGroup = (groupId: string) => {
-    // TODO: Navigate to group view - will be implemented in future tasks
-    console.log("Navigate to group:", groupId);
+    navigate(`/groups/${groupId}`);
   };
 
   const handleCreateGroup = () => {
