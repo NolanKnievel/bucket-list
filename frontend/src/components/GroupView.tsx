@@ -6,10 +6,13 @@ import { MembersList } from "./MembersList";
 import { ProgressBar } from "./ProgressBar";
 import { CountdownTimer } from "./CountdownTimer";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { BucketListItem as BucketListItemComponent } from "./BucketListItem";
+import { useAuth } from "../contexts/AuthContext";
 
 export const GroupView: React.FC = () => {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [group, setGroup] = useState<GroupWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,6 +72,47 @@ export const GroupView: React.FC = () => {
     if (!group) return 0;
     const items = group.items || [];
     return items.filter((item) => item.completed).length;
+  };
+
+  // Find current member ID based on authenticated user
+  const getCurrentMemberId = () => {
+    if (!user || !group?.members) return undefined;
+    const currentMember = group.members.find(
+      (member) => member.userId === user.id
+    );
+    return currentMember?.id;
+  };
+
+  // Handle toggling item completion
+  const handleToggleCompletion = async (itemId: string, completed: boolean) => {
+    const currentMemberId = getCurrentMemberId();
+    if (!currentMemberId) {
+      throw new Error("You must be a member of this group to toggle items");
+    }
+
+    try {
+      const updatedItem = await apiService.toggleItemCompletion(itemId, {
+        completed,
+        memberId: currentMemberId,
+      });
+
+      // Update the local state with the updated item
+      setGroup((prevGroup) => {
+        if (!prevGroup) return prevGroup;
+
+        const updatedItems = prevGroup.items.map((item) =>
+          item.id === itemId ? updatedItem : item
+        );
+
+        return {
+          ...prevGroup,
+          items: updatedItems,
+        };
+      });
+    } catch (error) {
+      console.error("Failed to toggle item completion:", error);
+      throw error;
+    }
   };
 
   console.log(
@@ -331,92 +375,13 @@ export const GroupView: React.FC = () => {
                             new Date(a.createdAt).getTime()
                         )
                         .map((item) => (
-                          <div
+                          <BucketListItemComponent
                             key={item.id}
-                            className={`p-4 border rounded-lg ${
-                              item.completed
-                                ? "bg-green-50 border-green-200"
-                                : "bg-white border-gray-200"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <h4
-                                  className={`font-medium ${
-                                    item.completed
-                                      ? "text-green-800 line-through"
-                                      : "text-gray-900"
-                                  }`}
-                                >
-                                  {item.title}
-                                </h4>
-                                {item.description && (
-                                  <p
-                                    className={`mt-1 text-sm ${
-                                      item.completed
-                                        ? "text-green-600"
-                                        : "text-gray-600"
-                                    }`}
-                                  >
-                                    {item.description}
-                                  </p>
-                                )}
-                                <div className="mt-2 flex items-center text-xs text-gray-500">
-                                  <span>
-                                    Added by{" "}
-                                    {group.members.find(
-                                      (m) => m.id === item.createdBy
-                                    )?.name || "Unknown"}
-                                  </span>
-                                  <span className="mx-2">•</span>
-                                  <span>
-                                    {new Date(
-                                      item.createdAt
-                                    ).toLocaleDateString()}
-                                  </span>
-                                  {item.completed && item.completedAt && (
-                                    <>
-                                      <span className="mx-2">•</span>
-                                      <span>
-                                        Completed{" "}
-                                        {new Date(
-                                          item.completedAt
-                                        ).toLocaleDateString()}
-                                      </span>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="ml-4">
-                                {item.completed ? (
-                                  <div className="flex items-center text-green-600">
-                                    <svg
-                                      className="h-5 w-5"
-                                      fill="currentColor"
-                                      viewBox="0 0 20 20"
-                                    >
-                                      <path
-                                        fillRule="evenodd"
-                                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                                        clipRule="evenodd"
-                                      />
-                                    </svg>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center text-gray-400">
-                                    <svg
-                                      className="h-5 w-5"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <circle cx="12" cy="12" r="10" />
-                                    </svg>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
+                            item={item}
+                            members={group.members}
+                            currentMemberId={getCurrentMemberId()}
+                            onToggleCompletion={handleToggleCompletion}
+                          />
                         ))}
                     </div>
                   )}

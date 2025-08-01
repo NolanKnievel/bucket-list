@@ -5,6 +5,9 @@ import {
   GroupWithDetails,
   JoinGroupRequest,
   Member,
+  CreateItemRequest,
+  ToggleCompletionRequest,
+  BucketListItem,
 } from "../types";
 import { supabase } from "../lib/supabase";
 
@@ -154,6 +157,52 @@ export const apiService = {
         throw error;
       }
       throw new ApiError("NETWORK_ERROR", "Failed to join group");
+    }
+  },
+
+  async createItem(
+    groupId: string,
+    request: CreateItemRequest
+  ): Promise<BucketListItem> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/groups/${groupId}/items`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(request),
+      });
+
+      const data = await handleResponse<{ item: BucketListItem }>(response);
+      return data.item;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError("NETWORK_ERROR", "Failed to create item");
+    }
+  },
+
+  async toggleItemCompletion(
+    itemId: string,
+    request: ToggleCompletionRequest
+  ): Promise<BucketListItem> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/items/${itemId}/complete`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(request),
+      });
+
+      const data = await handleResponse<{ item: BucketListItem }>(response);
+      return data.item;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError("NETWORK_ERROR", "Failed to toggle item completion");
     }
   },
 };
