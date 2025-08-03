@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiService, ApiError } from "../utils/api";
+import { getProgressData } from "../utils/progressCalculation";
 import { GroupWithDetails, BucketListItem } from "../types";
 import { MembersList } from "./MembersList";
 import { ProgressBar } from "./ProgressBar";
@@ -62,18 +63,10 @@ export const GroupView: React.FC = () => {
     loadGroup();
   }, [groupId]);
 
-  const calculateProgress = () => {
-    if (!group) return 0;
-    const items = group.items || [];
-    if (items.length === 0) return 0;
-    const completedItems = items.filter((item) => item.completed).length;
-    return Math.round((completedItems / items.length) * 100);
-  };
-
-  const getCompletedCount = () => {
-    if (!group) return 0;
-    const items = group.items || [];
-    return items.filter((item) => item.completed).length;
+  // Get progress data using utility functions
+  const getProgressInfo = () => {
+    const items = group?.items || [];
+    return getProgressData(items);
   };
 
   // Find current member ID based on authenticated user
@@ -274,11 +267,7 @@ export const GroupView: React.FC = () => {
                   Progress
                 </h3>
                 <ErrorBoundary>
-                  <ProgressBar
-                    current={getCompletedCount()}
-                    total={items.length}
-                    percentage={calculateProgress()}
-                  />
+                  <ProgressBar {...getProgressInfo()} />
                 </ErrorBoundary>
               </div>
 
