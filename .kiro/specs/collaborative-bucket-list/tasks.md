@@ -65,7 +65,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 4.4, 8.2, 8.3_
 
 - [ ] 5. Implement real-time WebSocket communication
-- [ ] 5.1 Set up WebSocket server with room-based broadcasting
+- [x] 5.1 Set up WebSocket server with room-based broadcasting
 
   - Create WebSocket server using Gorilla WebSocket library
   - Implement room management for group-specific message broadcasting
