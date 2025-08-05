@@ -4,6 +4,7 @@ import (
 	"collaborative-bucket-list/internal/handlers"
 	"collaborative-bucket-list/internal/middleware"
 	"collaborative-bucket-list/internal/repositories"
+	"collaborative-bucket-list/internal/websocket"
 	"collaborative-bucket-list/pkg/database"
 	"log"
 	"os"
@@ -35,9 +36,14 @@ func main() {
 	// Initialize repository manager
 	repoManager := repositories.NewPostgresRepositoryManager(database.DB)
 
+	// Initialize WebSocket hub
+	hub := websocket.NewHub()
+	go hub.Run()
+
 	// Initialize handlers
 	groupHandler := handlers.NewGroupHandler(repoManager)
 	bucketItemHandler := handlers.NewBucketItemHandler(repoManager)
+	wsHandler := handlers.NewWebSocketHandler(hub)
 
 	// Set up Gin router
 	r := gin.Default()
@@ -114,6 +120,16 @@ func main() {
 		// Bucket list item endpoints
 		// PATCH /api/items/:id/complete - Toggle item completion status
 		api.PATCH("/items/:id/complete", bucketItemHandler.ToggleCompletion)
+		
+		// WebSocket endpoints
+		// GET /api/ws/groups/:id - WebSocket connection for group
+		api.GET("/ws/groups/:id", wsHandler.HandleWebSocket)
+		
+		// GET /api/ws/rooms/:id/stats - Get room statistics
+		api.GET("/ws/rooms/:id/stats", wsHandler.GetRoomStats)
+		
+		// GET /api/ws/rooms/stats - Get all room statistics
+		api.GET("/ws/rooms/stats", wsHandler.GetAllRoomStats)
 	}
 
 	// Get port from environment or default to 8080
