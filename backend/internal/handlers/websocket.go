@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"collaborative-bucket-list/internal/repositories"
 	"collaborative-bucket-list/internal/websocket"
 	"net/http"
 
@@ -9,13 +10,16 @@ import (
 
 // WebSocketHandler handles WebSocket connections
 type WebSocketHandler struct {
-	hub *websocket.Hub
+	hub          *websocket.Hub
+	eventHandler *websocket.EventHandler
 }
 
 // NewWebSocketHandler creates a new WebSocket handler
-func NewWebSocketHandler(hub *websocket.Hub) *WebSocketHandler {
+func NewWebSocketHandler(hub *websocket.Hub, repos repositories.RepositoryManager) *WebSocketHandler {
+	eventHandler := websocket.NewEventHandler(hub, repos)
 	return &WebSocketHandler{
-		hub: hub,
+		hub:          hub,
+		eventHandler: eventHandler,
 	}
 }
 
@@ -46,7 +50,7 @@ func (h *WebSocketHandler) HandleWebSocket(c *gin.Context) {
 	}
 
 	// Upgrade the HTTP connection to WebSocket
-	websocket.ServeWS(h.hub, c.Writer, c.Request, roomID, memberID)
+	websocket.ServeWS(h.hub, c.Writer, c.Request, roomID, memberID, h.eventHandler)
 }
 
 // GetRoomStats returns statistics about active rooms and connections

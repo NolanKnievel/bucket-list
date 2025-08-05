@@ -1,7 +1,6 @@
 package websocket
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"time"
@@ -48,6 +47,9 @@ type Client struct {
 
 	// Member ID for this client
 	memberID string
+
+	// Event handler for processing WebSocket events
+	eventHandler *EventHandler
 }
 
 // Message represents a WebSocket message
@@ -59,13 +61,14 @@ type Message struct {
 }
 
 // NewClient creates a new WebSocket client
-func NewClient(hub *Hub, conn *websocket.Conn, roomID, memberID string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, roomID, memberID string, eventHandler *EventHandler) *Client {
 	return &Client{
-		hub:      hub,
-		conn:     conn,
-		send:     make(chan []byte, 256),
-		roomID:   roomID,
-		memberID: memberID,
+		hub:          hub,
+		conn:         conn,
+		send:         make(chan []byte, 256),
+		roomID:       roomID,
+		memberID:     memberID,
+		eventHandler: eventHandler,
 	}
 }
 
@@ -92,25 +95,12 @@ func (c *Client) readPump() {
 			break
 		}
 
-		// Parse the incoming message
-		var msg Message
-		if err := json.Unmarshal(message, &msg); err != nil {
-			log.Printf("Error unmarshaling message: %v", err)
-			continue
+		// Process the message through the event handler
+		if c.eventHandler != nil {
+			c.eventHandler.ProcessMessage(c, message)
+		} else {
+			log.Printf("No event handler available for client in room %s", c.roomID)
 		}
-
-		// Set the room ID and member ID from the client
-		msg.RoomID = c.roomID
-		msg.MemberID = c.memberID
-
-		// Re-marshal and broadcast
-		messageBytes, err := json.Marshal(msg)
-		if err != nil {
-			log.Printf("Error marshaling message: %v", err)
-			continue
-		}
-
-		c.hub.broadcast <- messageBytes
 	}
 }
 
@@ -159,14 +149,14 @@ func (c *Client) writePump() {
 }
 
 // ServeWS handles websocket requests from the peer
-func ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request, roomID, memberID string) {
+func ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request, roomID, memberID string, eventHandler *EventHandler) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
 		return
 	}
 
-	client := NewClient(hub, conn, roomID, memberID)
+	client := NewClient(hub, conn, roomID, memberID, eventHandler)
 	client.hub.register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in

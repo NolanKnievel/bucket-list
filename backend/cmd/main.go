@@ -43,7 +43,7 @@ func main() {
 	// Initialize handlers
 	groupHandler := handlers.NewGroupHandler(repoManager)
 	bucketItemHandler := handlers.NewBucketItemHandler(repoManager)
-	wsHandler := handlers.NewWebSocketHandler(hub)
+	wsHandler := handlers.NewWebSocketHandler(hub, repoManager)
 
 	// Set up Gin router
 	r := gin.Default()
