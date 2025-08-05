@@ -72,7 +72,7 @@
   - Write connection handling with proper cleanup and error recovery
   - _Requirements: 3.4, 5.4, 6.3, 6.4_
 
-- [ ] 5.2 Implement WebSocket event handlers
+- [x] 5.2 Implement WebSocket event handlers
 
   - Create handlers for join-group, add-item, and toggle-completion events
   - Implement broadcasting logic for member-joined, item-added, and item-updated events
