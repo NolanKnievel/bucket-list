@@ -90,6 +90,16 @@ export const JoinGroupForm: React.FC<JoinGroupFormProps> = ({ onSuccess }) => {
         memberName: sanitizedName,
       });
 
+      // Store member info in localStorage for guest access
+      localStorage.setItem(
+        `member_${groupId}`,
+        JSON.stringify({
+          id: member.id,
+          name: member.name,
+          joinedAt: member.joinedAt,
+        })
+      );
+
       // Call success callback if provided
       if (onSuccess) {
         onSuccess(groupId, member);

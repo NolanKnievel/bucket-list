@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiService, ApiError } from "../utils/api";
 
@@ -18,7 +24,7 @@ import { useRealTimeProgress } from "../hooks/useRealTimeProgress";
 export const GroupView: React.FC = () => {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [group, setGroup] = useState<GroupWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,12 +37,44 @@ export const GroupView: React.FC = () => {
 
   // Get current member ID based on authenticated user
   const getCurrentMemberId = useCallback(() => {
-    if (!user || !group?.members) return undefined;
-    const currentMember = group.members.find(
-      (member) => member.userId === user.id
-    );
-    return currentMember?.id;
-  }, [user, group?.members]);
+    // First, try to find member by authenticated user ID
+    if (user && group?.members) {
+      const currentMember = group.members.find(
+        (member) => member.userId === user.id
+      );
+      if (currentMember) {
+        return currentMember.id;
+      }
+    }
+
+    // If no authenticated user or no matching member, check localStorage for guest member
+    if (groupId && group?.members) {
+      try {
+        const storedMemberData = localStorage.getItem(`member_${groupId}`);
+        if (storedMemberData) {
+          const memberInfo = JSON.parse(storedMemberData);
+          // Verify the member still exists in the group
+          const guestMember = group.members.find(
+            (member) => member.id === memberInfo.id
+          );
+          if (guestMember) {
+            return guestMember.id;
+          } else {
+            // Member no longer exists, clean up localStorage
+            localStorage.removeItem(`member_${groupId}`);
+          }
+        }
+      } catch (error) {
+        console.error("Error reading member info from localStorage:", error);
+        // Clean up corrupted data
+        if (groupId) {
+          localStorage.removeItem(`member_${groupId}`);
+        }
+      }
+    }
+
+    return undefined;
+  }, [user, group, groupId]);
 
   // Real-time event handlers
   const handleMemberJoined = useCallback((newMember: Member) => {
@@ -61,12 +99,13 @@ export const GroupView: React.FC = () => {
       if (!prevGroup) return prevGroup;
 
       // Check if item already exists to avoid duplicates
-      const itemExists = prevGroup.items.some((item) => item.id === newItem.id);
+      const items = prevGroup.items || [];
+      const itemExists = items.some((item) => item.id === newItem.id);
       if (itemExists) return prevGroup;
 
       return {
         ...prevGroup,
-        items: [newItem, ...prevGroup.items], // Add new item at the beginning
+        items: [newItem, ...items], // Add new item at the beginning
       };
     });
   }, []);
@@ -76,7 +115,7 @@ export const GroupView: React.FC = () => {
     setGroup((prevGroup) => {
       if (!prevGroup) return prevGroup;
 
-      const updatedItems = prevGroup.items.map((item) =>
+      const updatedItems = (prevGroup.items || []).map((item) =>
         item.id === updatedItem.id ? updatedItem : item
       );
 
@@ -98,12 +137,40 @@ export const GroupView: React.FC = () => {
     []
   );
 
-  // WebSocket connection (optional for testing)
+  // Get current member ID
+  const currentMemberId = getCurrentMemberId();
+
+  // Debug logging
+  console.log("WebSocket connection check:", {
+    groupId,
+    currentMemberId,
+    hasUser: !!user,
+    hasGroup: !!group,
+    hasMembers: !!group?.members,
+    authLoading,
+  });
+
+  // WebSocket connection - always call the hook to avoid Rules of Hooks violation
   let webSocket: ReturnType<typeof useNativeWebSocketConnection> | null = null;
   try {
+    // Always call the hook, but pass empty values if data isn't ready
+    // Wait for auth to complete and ensure we have all required data
+    const shouldConnect = !!(groupId && currentMemberId && !authLoading);
+
+    if (shouldConnect) {
+      console.log("Establishing WebSocket connection with:", {
+        groupId,
+        currentMemberId,
+      });
+    } else {
+      console.log(
+        "WebSocket hook called but connection skipped - missing required data or auth loading"
+      );
+    }
+
     webSocket = useNativeWebSocketConnection({
       groupId: groupId || "",
-      memberId: getCurrentMemberId() || "",
+      memberId: currentMemberId || "",
       onMemberJoined: handleMemberJoined,
       onItemAdded: handleItemAdded,
       onItemUpdated: handleItemUpdated,
@@ -166,14 +233,17 @@ export const GroupView: React.FC = () => {
     loadGroup();
   }, [groupId]);
 
-  // Get real-time progress data
+  // Get real-time progress data - stabilize the items array
+  const items = useMemo(() => {
+    return group && group.items ? group.items : [];
+  }, [group]);
+
   const progressData = useRealTimeProgress({
-    items: group?.items || [],
+    items,
   });
 
   // Handle toggling item completion with optimistic updates
   const handleToggleCompletion = async (itemId: string, completed: boolean) => {
-    const currentMemberId = getCurrentMemberId();
     if (!currentMemberId) {
       throw new Error("You must be a member of this group to toggle items");
     }
@@ -196,7 +266,7 @@ export const GroupView: React.FC = () => {
     setGroup((prevGroup) => {
       if (!prevGroup) return prevGroup;
 
-      const updatedItems = prevGroup.items.map((item) =>
+      const updatedItems = (prevGroup.items || []).map((item) =>
         item.id === itemId ? optimisticItem : item
       );
 
@@ -227,7 +297,7 @@ export const GroupView: React.FC = () => {
       setGroup((prevGroup) => {
         if (!prevGroup) return prevGroup;
 
-        const rolledBackItems = prevGroup.items.map((item) =>
+        const rolledBackItems = (prevGroup.items || []).map((item) =>
           item.id === itemId ? originalItem : item
         );
 
@@ -256,7 +326,6 @@ export const GroupView: React.FC = () => {
     title: string;
     description?: string;
   }) => {
-    const currentMemberId = getCurrentMemberId();
     if (!currentMemberId || !groupId) return;
 
     const optimisticUpdateId = `add-item-${Date.now()}`;
@@ -280,7 +349,7 @@ export const GroupView: React.FC = () => {
 
       return {
         ...prevGroup,
-        items: [optimisticItem, ...prevGroup.items],
+        items: [optimisticItem, ...(prevGroup.items || [])],
       };
     });
 
@@ -300,7 +369,7 @@ export const GroupView: React.FC = () => {
       setGroup((prevGroup) => {
         if (!prevGroup) return prevGroup;
 
-        const updatedItems = prevGroup.items.map((item) =>
+        const updatedItems = (prevGroup.items || []).map((item) =>
           item.id === optimisticItem.id ? actualItem : item
         );
 
@@ -319,7 +388,7 @@ export const GroupView: React.FC = () => {
       setGroup((prevGroup) => {
         if (!prevGroup) return prevGroup;
 
-        const rolledBackItems = prevGroup.items.filter(
+        const rolledBackItems = (prevGroup.items || []).filter(
           (item) => item.id !== optimisticItem.id
         );
 
@@ -409,8 +478,7 @@ export const GroupView: React.FC = () => {
     return null;
   }
 
-  // Ensure items is always an array
-  const items = group.items || [];
+  // items is already defined above with useMemo
 
   console.log("GroupView: Rendering main content");
 
@@ -608,7 +676,7 @@ export const GroupView: React.FC = () => {
                   <h2 className="text-xl font-semibold text-gray-900">
                     Bucket List
                   </h2>
-                  {getCurrentMemberId() && !showAddForm && (
+                  {currentMemberId && !showAddForm && (
                     <button
                       onClick={() => setShowAddForm(true)}
                       className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 flex items-center"
@@ -632,11 +700,11 @@ export const GroupView: React.FC = () => {
                 </div>
 
                 {/* Add Item Form */}
-                {showAddForm && getCurrentMemberId() && (
+                {showAddForm && currentMemberId && (
                   <ErrorBoundary>
                     <AddItemFormWithWebSocket
                       groupId={group.id}
-                      memberId={getCurrentMemberId()!}
+                      memberId={currentMemberId}
                       onItemAdded={handleItemAddedFromForm}
                       onCancel={() => setShowAddForm(false)}
                       onAddItemWithWebSocket={handleAddItemWithWebSocket}
@@ -680,7 +748,7 @@ export const GroupView: React.FC = () => {
                             key={item.id}
                             item={item}
                             members={group.members}
-                            currentMemberId={getCurrentMemberId()}
+                            currentMemberId={currentMemberId}
                             onToggleCompletion={handleToggleCompletion}
                           />
                         ))}
