@@ -21,7 +21,13 @@ interface AddItemFormWithWebSocketProps {
 
 export const AddItemFormWithWebSocket: React.FC<
   AddItemFormWithWebSocketProps
-> = ({ groupId, memberId, onItemAdded, onCancel, onAddItemWithWebSocket }) => {
+> = ({
+  groupId: _groupId,
+  memberId,
+  onItemAdded: _onItemAdded,
+  onCancel,
+  onAddItemWithWebSocket,
+}) => {
   const [formData, setFormData] = useState({
     title: "",
     description: "",

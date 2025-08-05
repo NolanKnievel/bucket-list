@@ -5,7 +5,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
-import { WebSocketProvider } from "./contexts/WebSocketContext";
+import { NativeWebSocketProvider } from "./contexts/NativeWebSocketContext";
 import { HomePage } from "./components/HomePage";
 import { Dashboard } from "./components/Dashboard";
 import { CreateGroupPage } from "./components/CreateGroupPage";
@@ -16,7 +16,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 function App() {
   return (
     <AuthProvider>
-      <WebSocketProvider>
+      <NativeWebSocketProvider>
         <Router>
           <Routes>
             {/* Public route - Home page with authentication */}
@@ -48,7 +48,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Router>
-      </WebSocketProvider>
+      </NativeWebSocketProvider>
     </AuthProvider>
   );
 }

@@ -6,7 +6,6 @@ import React, {
   useCallback,
   useRef,
 } from "react";
-import { io, Socket } from "socket.io-client";
 import { BucketListItem, Member } from "../types";
 
 // WebSocket connection states
@@ -31,12 +30,6 @@ export const WS_EVENTS = {
   ITEM_UPDATED: "item-updated",
   ERROR: "error",
 } as const;
-
-// Socket.IO connection options
-interface SocketOptions {
-  groupId: string;
-  memberId: string;
-}
 
 // Event payload types
 interface JoinGroupPayload {
@@ -65,8 +58,16 @@ interface ErrorPayload {
   message: string;
   details?: string;
 }
+
+interface WebSocketMessage {
+  type: string;
+  roomId: string;
+  memberId: string;
+  data: any;
+}
+
 // WebSocket context interface
-interface WebSocketContextType {
+interface NativeWebSocketContextType {
   connectionState: ConnectionState;
   isConnected: boolean;
   error: string | null;
@@ -92,22 +93,28 @@ interface WebSocketContextType {
   onError: (callback: (error: ErrorPayload) => void) => () => void;
 }
 
-const WebSocketContext = createContext<WebSocketContextType | null>(null);
+const NativeWebSocketContext = createContext<NativeWebSocketContextType | null>(
+  null
+);
 
 // WebSocket provider component
-export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const NativeWebSocketProvider: React.FC<{
+  children: React.ReactNode;
+}> = ({ children }) => {
   const [connectionState, setConnectionState] = useState<ConnectionState>(
     ConnectionState.DISCONNECTED
   );
   const [error, setError] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  const socketRef = useRef<Socket | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
-  const lastConnectionOptionsRef = useRef<SocketOptions | null>(null);
+  const lastConnectionOptionsRef = useRef<{
+    groupId: string;
+    memberId: string;
+  } | null>(null);
+  const currentMemberIdRef = useRef<string>("");
   const maxReconnectAttempts = 5;
   const reconnectDelay = 1000; // Start with 1 second
 
@@ -123,102 +130,110 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
   );
   const errorListeners = useRef<Set<(error: ErrorPayload) => void>>(new Set());
 
-  // Get Socket.IO server URL from environment or default
-  const getSocketUrl = useCallback(() => {
-    const protocol = window.location.protocol === "https:" ? "https:" : "http:";
-    const host = import.meta.env.VITE_WS_HOST || window.location.host;
-    return `${protocol}//${host}`;
-  }, []);
-
-  // Send message via Socket.IO
-  const sendMessage = useCallback((eventType: string, data: any) => {
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit(eventType, data);
+  // Get WebSocket server URL from environment or default
+  const getWebSocketUrl = useCallback((groupId: string, memberId: string) => {
+    const wsUrl = import.meta.env.VITE_WS_URL;
+    if (wsUrl) {
+      // Use the configured WebSocket URL and convert http/https to ws/wss
+      const protocol = wsUrl.startsWith("https:") ? "wss:" : "ws:";
+      const host = wsUrl.replace(/^https?:\/\//, "");
+      return `${protocol}//${host}/api/ws/groups/${groupId}?memberId=${memberId}`;
     } else {
-      console.warn(
-        "Socket.IO is not connected. Cannot send message:",
-        eventType,
-        data
-      );
+      // Fallback to localhost:8080
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      return `${protocol}//localhost:8080/api/ws/groups/${groupId}?memberId=${memberId}`;
     }
-  }, []); // Setup Socket.IO event listeners
-  const setupSocketListeners = useCallback((socket: Socket) => {
-    // Handle member joined events
-    socket.on(WS_EVENTS.MEMBER_JOINED, (member: Member) => {
-      memberJoinedListeners.current.forEach((listener) => listener(member));
-    });
-
-    // Handle item added events
-    socket.on(WS_EVENTS.ITEM_ADDED, (item: BucketListItem) => {
-      itemAddedListeners.current.forEach((listener) => listener(item));
-    });
-
-    // Handle item updated events
-    socket.on(WS_EVENTS.ITEM_UPDATED, (item: BucketListItem) => {
-      itemUpdatedListeners.current.forEach((listener) => listener(item));
-    });
-
-    // Handle error events
-    socket.on(WS_EVENTS.ERROR, (errorData: ErrorPayload) => {
-      setError(`${errorData.code}: ${errorData.message}`);
-      errorListeners.current.forEach((listener) => listener(errorData));
-    });
-
-    // Handle generic errors
-    socket.on("error", (err: any) => {
-      console.error("Socket.IO error:", err);
-      setError("Socket.IO connection error");
-      setConnectionState(ConnectionState.ERROR);
-    });
   }, []);
 
-  // Handle Socket.IO connection events
-  const handleConnect = useCallback(() => {
-    console.log("Socket.IO connected");
+  // Send message via WebSocket
+  const sendMessage = useCallback(
+    (messageType: string, data: any, roomId: string, memberId: string) => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        const message: WebSocketMessage = {
+          type: messageType,
+          roomId,
+          memberId,
+          data,
+        };
+        wsRef.current.send(JSON.stringify(message));
+      } else {
+        console.warn(
+          "WebSocket is not connected. Cannot send message:",
+          messageType,
+          data
+        );
+      }
+    },
+    []
+  );
+
+  // Handle incoming WebSocket messages
+  const handleMessage = useCallback((event: MessageEvent) => {
+    try {
+      const message: WebSocketMessage = JSON.parse(event.data);
+
+      switch (message.type) {
+        case WS_EVENTS.MEMBER_JOINED:
+          memberJoinedListeners.current.forEach((listener) =>
+            listener(message.data)
+          );
+          break;
+        case WS_EVENTS.ITEM_ADDED:
+          itemAddedListeners.current.forEach((listener) =>
+            listener(message.data)
+          );
+          break;
+        case WS_EVENTS.ITEM_UPDATED:
+          itemUpdatedListeners.current.forEach((listener) =>
+            listener(message.data)
+          );
+          break;
+        case WS_EVENTS.ERROR:
+          setError(`${message.data.code}: ${message.data.message}`);
+          errorListeners.current.forEach((listener) => listener(message.data));
+          break;
+        default:
+          console.log("Unknown message type:", message.type);
+      }
+    } catch (err) {
+      console.error("Error parsing WebSocket message:", err);
+    }
+  }, []);
+
+  // Handle WebSocket connection events
+  const handleOpen = useCallback(() => {
+    console.log("WebSocket connected");
     setConnectionState(ConnectionState.CONNECTED);
     setError(null);
     reconnectAttemptsRef.current = 0;
   }, []);
 
-  const handleDisconnect = useCallback((reason: string) => {
-    console.log("Socket.IO disconnected:", reason);
+  const handleClose = useCallback((event: CloseEvent) => {
+    console.log("WebSocket disconnected:", event.code, event.reason);
     setConnectionState(ConnectionState.DISCONNECTED);
 
-    // Socket.IO handles automatic reconnection, but we track the state
-    if (reason === "io server disconnect") {
-      // Server initiated disconnect, don't try to reconnect
-      setError("Server disconnected");
-      setConnectionState(ConnectionState.ERROR);
+    // Attempt to reconnect if it wasn't a clean close
+    if (
+      event.code !== 1000 &&
+      reconnectAttemptsRef.current < maxReconnectAttempts
+    ) {
+      setConnectionState(ConnectionState.RECONNECTING);
+      reconnectAttemptsRef.current++;
+
+      const delay =
+        reconnectDelay * Math.pow(2, reconnectAttemptsRef.current - 1);
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (lastConnectionOptionsRef.current) {
+          const { groupId, memberId } = lastConnectionOptionsRef.current;
+          connect(groupId, memberId);
+        }
+      }, delay);
     }
   }, []);
 
-  const handleConnectError = useCallback((error: Error) => {
-    console.error("Socket.IO connection error:", error);
-    setError(`Connection failed: ${error.message}`);
-    setConnectionState(ConnectionState.ERROR);
-  }, []);
-
-  const handleReconnect = useCallback((attemptNumber: number) => {
-    console.log(`Socket.IO reconnected after ${attemptNumber} attempts`);
-    setConnectionState(ConnectionState.CONNECTED);
-    setError(null);
-    reconnectAttemptsRef.current = 0;
-  }, []);
-
-  const handleReconnectAttempt = useCallback((attemptNumber: number) => {
-    console.log(`Socket.IO reconnection attempt ${attemptNumber}`);
-    setConnectionState(ConnectionState.RECONNECTING);
-    reconnectAttemptsRef.current = attemptNumber;
-  }, []);
-
-  const handleReconnectError = useCallback((error: Error) => {
-    console.error("Socket.IO reconnection error:", error);
-    setError(`Reconnection failed: ${error.message}`);
-  }, []);
-
-  const handleReconnectFailed = useCallback(() => {
-    console.error("Socket.IO reconnection failed after all attempts");
-    setError("Failed to reconnect after maximum attempts");
+  const handleError = useCallback((event: Event) => {
+    console.error("WebSocket error:", event);
+    setError("WebSocket connection error");
     setConnectionState(ConnectionState.ERROR);
   }, []);
 
@@ -254,12 +269,14 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [handleOnline, handleOffline]); // Connect to Socket.IO server
+  }, [handleOnline, handleOffline]);
+
+  // Connect to WebSocket server
   const connect = useCallback(
     (groupId: string, memberId: string) => {
-      // Disconnect existing socket if any
-      if (socketRef.current) {
-        socketRef.current.disconnect();
+      // Disconnect existing WebSocket if any
+      if (wsRef.current) {
+        wsRef.current.close();
       }
 
       // Clear any pending reconnect timeout
@@ -274,70 +291,45 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // Store connection options for potential reconnection
         lastConnectionOptionsRef.current = { groupId, memberId };
+        currentMemberIdRef.current = memberId;
 
-        const socketUrl = getSocketUrl();
-        const socket = io(socketUrl, {
-          query: {
-            groupId,
-            memberId,
-          },
-          transports: ["websocket", "polling"], // Fallback to polling if websocket fails
-          timeout: 10000, // 10 second timeout
-          reconnection: true,
-          reconnectionAttempts: maxReconnectAttempts,
-          reconnectionDelay: reconnectDelay,
-          reconnectionDelayMax: 5000,
-          forceNew: true, // Force a new connection
-        });
+        const wsUrl = getWebSocketUrl(groupId, memberId);
+        console.log("Connecting to WebSocket:", wsUrl);
 
-        // Setup connection event listeners
-        socket.on("connect", handleConnect);
-        socket.on("disconnect", handleDisconnect);
-        socket.on("connect_error", handleConnectError);
-        socket.on("reconnect", handleReconnect);
-        socket.on("reconnect_attempt", handleReconnectAttempt);
-        socket.on("reconnect_error", handleReconnectError);
-        socket.on("reconnect_failed", handleReconnectFailed);
+        const ws = new WebSocket(wsUrl);
 
-        // Setup application event listeners
-        setupSocketListeners(socket);
+        ws.onopen = handleOpen;
+        ws.onclose = handleClose;
+        ws.onerror = handleError;
+        ws.onmessage = handleMessage;
 
-        socketRef.current = socket;
+        wsRef.current = ws;
       } catch (err) {
-        console.error("Failed to create Socket.IO connection:", err);
-        setError("Failed to create Socket.IO connection");
+        console.error("Failed to create WebSocket connection:", err);
+        setError("Failed to create WebSocket connection");
         setConnectionState(ConnectionState.ERROR);
       }
     },
-    [
-      getSocketUrl,
-      handleConnect,
-      handleDisconnect,
-      handleConnectError,
-      handleReconnect,
-      handleReconnectAttempt,
-      handleReconnectError,
-      handleReconnectFailed,
-      setupSocketListeners,
-    ]
+    [getWebSocketUrl, handleOpen, handleClose, handleError, handleMessage]
   );
 
-  // Disconnect from Socket.IO server
+  // Disconnect from WebSocket server
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
 
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-      socketRef.current = null;
+    if (wsRef.current) {
+      wsRef.current.close(1000, "Client disconnect");
+      wsRef.current = null;
     }
 
     setConnectionState(ConnectionState.DISCONNECTED);
     setError(null);
     reconnectAttemptsRef.current = 0;
     lastConnectionOptionsRef.current = null;
+    currentMemberIdRef.current = "";
   }, []);
 
   // Manual reconnect method
@@ -351,11 +343,11 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [connect]);
 
-  // Socket.IO event methods
+  // WebSocket event methods
   const joinGroup = useCallback(
     (groupId: string, memberId: string) => {
       const payload: JoinGroupPayload = { groupId, memberId };
-      sendMessage(WS_EVENTS.JOIN_GROUP, payload);
+      sendMessage(WS_EVENTS.JOIN_GROUP, payload, groupId, memberId);
     },
     [sendMessage]
   );
@@ -366,7 +358,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
       item: { title: string; description?: string; memberId: string }
     ) => {
       const payload: AddItemPayload = { groupId, item };
-      sendMessage(WS_EVENTS.ADD_ITEM, payload);
+      sendMessage(WS_EVENTS.ADD_ITEM, payload, groupId, item.memberId);
     },
     [sendMessage]
   );
@@ -379,7 +371,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
         completed,
         memberId,
       };
-      sendMessage(WS_EVENTS.TOGGLE_COMPLETION, payload);
+      sendMessage(WS_EVENTS.TOGGLE_COMPLETION, payload, groupId, memberId);
     },
     [sendMessage]
   );
@@ -418,7 +410,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, [disconnect]);
 
-  const contextValue: WebSocketContextType = {
+  const contextValue: NativeWebSocketContextType = {
     connectionState,
     isConnected: connectionState === ConnectionState.CONNECTED,
     isOnline,
@@ -437,17 +429,19 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   return (
-    <WebSocketContext.Provider value={contextValue}>
+    <NativeWebSocketContext.Provider value={contextValue}>
       {children}
-    </WebSocketContext.Provider>
+    </NativeWebSocketContext.Provider>
   );
 };
 
 // Custom hook to use WebSocket context
-export const useWebSocket = (): WebSocketContextType => {
-  const context = useContext(WebSocketContext);
+export const useNativeWebSocket = (): NativeWebSocketContextType => {
+  const context = useContext(NativeWebSocketContext);
   if (!context) {
-    throw new Error("useWebSocket must be used within a WebSocketProvider");
+    throw new Error(
+      "useNativeWebSocket must be used within a NativeWebSocketProvider"
+    );
   }
   return context;
 };

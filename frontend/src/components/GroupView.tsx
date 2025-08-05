@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiService, ApiError } from "../utils/api";
-import { getProgressData } from "../utils/progressCalculation";
+
 import { GroupWithDetails, BucketListItem, Member } from "../types";
 import { MembersList } from "./MembersList";
 import { ProgressBar } from "./ProgressBar";
 import { CountdownTimer } from "./CountdownTimer";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { BucketListItem as BucketListItemComponent } from "./BucketListItem";
-import { AddItemForm } from "./AddItemForm";
+
 import { AddItemFormWithWebSocket } from "./AddItemFormWithWebSocket";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { useAuth } from "../contexts/AuthContext";
-import { useWebSocketConnection } from "../hooks/useWebSocketConnection";
+import { useNativeWebSocketConnection } from "../hooks/useNativeWebSocketConnection";
 import { useRealTimeProgress } from "../hooks/useRealTimeProgress";
 
 export const GroupView: React.FC = () => {
@@ -99,9 +99,9 @@ export const GroupView: React.FC = () => {
   );
 
   // WebSocket connection (optional for testing)
-  let webSocket: ReturnType<typeof useWebSocketConnection> | null = null;
+  let webSocket: ReturnType<typeof useNativeWebSocketConnection> | null = null;
   try {
-    webSocket = useWebSocketConnection({
+    webSocket = useNativeWebSocketConnection({
       groupId: groupId || "",
       memberId: getCurrentMemberId() || "",
       onMemberJoined: handleMemberJoined,
@@ -243,7 +243,7 @@ export const GroupView: React.FC = () => {
   };
 
   // Handle adding new item from form (legacy callback)
-  const handleItemAddedFromForm = async (newItem: BucketListItem) => {
+  const handleItemAddedFromForm = async (_newItem: BucketListItem) => {
     // This is called from AddItemForm after successful API call
     // The real-time update will be handled by WebSocket events
 
@@ -287,7 +287,7 @@ export const GroupView: React.FC = () => {
     try {
       // Send WebSocket event for real-time updates
       if (webSocket?.isConnected) {
-        webSocket.addItem({ ...itemData, memberId: currentMemberId });
+        webSocket.addItem(itemData);
       }
 
       // Call API for persistence
