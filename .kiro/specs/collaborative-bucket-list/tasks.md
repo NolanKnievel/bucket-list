@@ -156,7 +156,7 @@
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
 - [ ] 10. Integrate real-time updates in frontend
-- [ ] 10.1 Set up WebSocket client integration
+- [x] 10.1 Set up WebSocket client integration
 
   - Implement Socket.IO client connection with automatic reconnection
   - Create WebSocket context and hooks for React components
@@ -164,7 +164,7 @@
   - Handle connection errors and offline scenarios
   - _Requirements: 6.3, 6.4_
 
-- [ ] 10.2 Implement real-time event handling
+- [x] 10.2 Implement real-time event handling
 
   - Connect WebSocket events to UI updates for member joining, item addition, and completion changes
   - Write event handlers that update local state and trigger re-renders
