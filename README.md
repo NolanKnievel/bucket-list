@@ -68,4 +68,32 @@ go run cmd/main.go
 
 ## Environment Variables
 
-See `.env.example` files in both `frontend/` and `backend/` directories for required configuration.
+See `ENVIRONMENT.md` for detailed environment variable documentation and `PRODUCTION_SETUP.md` for production deployment instructions.
+
+### Quick Setup
+
+```bash
+# Backend
+cp backend/env.example backend/.env
+# Edit backend/.env with your configuration
+
+# Frontend  
+cp frontend/env.example frontend/.env.local
+# Edit frontend/.env.local with your configuration
+```
+
+## Production Deployment
+
+For production deployment, see `PRODUCTION_SETUP.md` for comprehensive instructions.
+
+### Quick Production Deployment
+
+```bash
+# Automated deployment with monitoring
+./scripts/deploy-production.sh --monitoring
+
+# Manual deployment
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+## Development

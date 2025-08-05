@@ -1,0 +1,102 @@
+version: "3.8"
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: collaborative-bucket-list-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: collaborative-bucket-list-backend
+    ports:
+      - "8080:8080"
+      - "9090:9090" # Metrics port
+    env_file:
+      - ./backend/.env
+    environment:
+      - GIN_MODE=release
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+      - METRICS_ENABLED=true
+      - HEALTH_CHECK_ENABLED=true
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8080/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+    volumes:
+      - ./backend/logs:/app/logs
+
+  # Optional: Reverse proxy with SSL termination
+  nginx:
+    image: nginx:alpine
+    container_name: collaborative-bucket-list-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/logs:/var/log/nginx
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - app-network
+
+  # Optional: Log aggregation
+  fluentd:
+    image: fluent/fluentd:v1.16-debian-1
+    container_name: collaborative-bucket-list-logs
+    volumes:
+      - ./fluentd/conf:/fluentd/etc
+      - ./backend/logs:/var/log/backend
+      - ./nginx/logs:/var/log/nginx
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  backend_logs:
+  nginx_logs:
