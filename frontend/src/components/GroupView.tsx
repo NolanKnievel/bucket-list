@@ -1,15 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiService, ApiError } from "../utils/api";
 import { getProgressData } from "../utils/progressCalculation";
-import { GroupWithDetails, BucketListItem } from "../types";
+import { GroupWithDetails, BucketListItem, Member } from "../types";
 import { MembersList } from "./MembersList";
 import { ProgressBar } from "./ProgressBar";
 import { CountdownTimer } from "./CountdownTimer";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { BucketListItem as BucketListItemComponent } from "./BucketListItem";
 import { AddItemForm } from "./AddItemForm";
+import { AddItemFormWithWebSocket } from "./AddItemFormWithWebSocket";
+import { ConnectionStatus } from "./ConnectionStatus";
 import { useAuth } from "../contexts/AuthContext";
+import { useWebSocketConnection } from "../hooks/useWebSocketConnection";
+import { useRealTimeProgress } from "../hooks/useRealTimeProgress";
 
 export const GroupView: React.FC = () => {
   const { groupId } = useParams<{ groupId: string }>();
@@ -20,6 +24,105 @@ export const GroupView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // Track optimistic updates for rollback functionality
+  const optimisticUpdatesRef = useRef<Map<string, any>>(new Map());
+  const [wsError, setWsError] = useState<string | null>(null);
+
+  // Get current member ID based on authenticated user
+  const getCurrentMemberId = useCallback(() => {
+    if (!user || !group?.members) return undefined;
+    const currentMember = group.members.find(
+      (member) => member.userId === user.id
+    );
+    return currentMember?.id;
+  }, [user, group?.members]);
+
+  // Real-time event handlers
+  const handleMemberJoined = useCallback((newMember: Member) => {
+    console.log("Real-time: Member joined", newMember);
+    setGroup((prevGroup) => {
+      if (!prevGroup) return prevGroup;
+
+      // Check if member already exists to avoid duplicates
+      const memberExists = prevGroup.members.some((m) => m.id === newMember.id);
+      if (memberExists) return prevGroup;
+
+      return {
+        ...prevGroup,
+        members: [...prevGroup.members, newMember],
+      };
+    });
+  }, []);
+
+  const handleItemAdded = useCallback((newItem: BucketListItem) => {
+    console.log("Real-time: Item added", newItem);
+    setGroup((prevGroup) => {
+      if (!prevGroup) return prevGroup;
+
+      // Check if item already exists to avoid duplicates
+      const itemExists = prevGroup.items.some((item) => item.id === newItem.id);
+      if (itemExists) return prevGroup;
+
+      return {
+        ...prevGroup,
+        items: [newItem, ...prevGroup.items], // Add new item at the beginning
+      };
+    });
+  }, []);
+
+  const handleItemUpdated = useCallback((updatedItem: BucketListItem) => {
+    console.log("Real-time: Item updated", updatedItem);
+    setGroup((prevGroup) => {
+      if (!prevGroup) return prevGroup;
+
+      const updatedItems = prevGroup.items.map((item) =>
+        item.id === updatedItem.id ? updatedItem : item
+      );
+
+      return {
+        ...prevGroup,
+        items: updatedItems,
+      };
+    });
+  }, []);
+
+  const handleWebSocketError = useCallback(
+    (error: { code: string; message: string; details?: string }) => {
+      console.error("WebSocket error:", error);
+      setWsError(`${error.code}: ${error.message}`);
+
+      // Clear error after 5 seconds
+      setTimeout(() => setWsError(null), 5000);
+    },
+    []
+  );
+
+  // WebSocket connection (optional for testing)
+  let webSocket: ReturnType<typeof useWebSocketConnection> | null = null;
+  try {
+    webSocket = useWebSocketConnection({
+      groupId: groupId || "",
+      memberId: getCurrentMemberId() || "",
+      onMemberJoined: handleMemberJoined,
+      onItemAdded: handleItemAdded,
+      onItemUpdated: handleItemUpdated,
+      onError: handleWebSocketError,
+    });
+  } catch (error) {
+    // WebSocket not available (e.g., in tests without provider)
+    console.warn("WebSocket not available:", error);
+    webSocket = {
+      connectionState: "disconnected" as any,
+      isConnected: false,
+      isOnline: true,
+      error: null,
+      reconnectAttempts: 0,
+      reconnect: () => {},
+      addItem: () => {},
+      toggleCompletion: () => {},
+    };
+  }
 
   useEffect(() => {
     const loadGroup = async () => {
@@ -63,40 +166,142 @@ export const GroupView: React.FC = () => {
     loadGroup();
   }, [groupId]);
 
-  // Get progress data using utility functions
-  const getProgressInfo = () => {
-    const items = group?.items || [];
-    return getProgressData(items);
-  };
+  // Get real-time progress data
+  const progressData = useRealTimeProgress({
+    items: group?.items || [],
+  });
 
-  // Find current member ID based on authenticated user
-  const getCurrentMemberId = () => {
-    if (!user || !group?.members) return undefined;
-    const currentMember = group.members.find(
-      (member) => member.userId === user.id
-    );
-    return currentMember?.id;
-  };
-
-  // Handle toggling item completion
+  // Handle toggling item completion with optimistic updates
   const handleToggleCompletion = async (itemId: string, completed: boolean) => {
     const currentMemberId = getCurrentMemberId();
     if (!currentMemberId) {
       throw new Error("You must be a member of this group to toggle items");
     }
 
+    // Store original item state for potential rollback
+    const originalItem = group?.items.find((item) => item.id === itemId);
+    if (!originalItem) return;
+
+    const optimisticUpdateId = `toggle-${itemId}-${Date.now()}`;
+    optimisticUpdatesRef.current.set(optimisticUpdateId, originalItem);
+
+    // Optimistic update - immediately update UI
+    const optimisticItem: BucketListItem = {
+      ...originalItem,
+      completed,
+      completedBy: completed ? currentMemberId : undefined,
+      completedAt: completed ? new Date().toISOString() : undefined,
+    };
+
+    setGroup((prevGroup) => {
+      if (!prevGroup) return prevGroup;
+
+      const updatedItems = prevGroup.items.map((item) =>
+        item.id === itemId ? optimisticItem : item
+      );
+
+      return {
+        ...prevGroup,
+        items: updatedItems,
+      };
+    });
+
     try {
-      const updatedItem = await apiService.toggleItemCompletion(itemId, {
+      // Send WebSocket event for real-time updates to other clients
+      if (webSocket?.isConnected) {
+        webSocket.toggleCompletion(itemId, completed);
+      }
+
+      // Also call API for persistence (backend will handle WebSocket broadcast)
+      await apiService.toggleItemCompletion(itemId, {
         completed,
         memberId: currentMemberId,
       });
 
-      // Update the local state with the updated item
+      // Success - remove optimistic update tracking
+      optimisticUpdatesRef.current.delete(optimisticUpdateId);
+    } catch (error) {
+      console.error("Failed to toggle item completion:", error);
+
+      // Rollback optimistic update
+      setGroup((prevGroup) => {
+        if (!prevGroup) return prevGroup;
+
+        const rolledBackItems = prevGroup.items.map((item) =>
+          item.id === itemId ? originalItem : item
+        );
+
+        return {
+          ...prevGroup,
+          items: rolledBackItems,
+        };
+      });
+
+      optimisticUpdatesRef.current.delete(optimisticUpdateId);
+      throw error;
+    }
+  };
+
+  // Handle adding new item from form (legacy callback)
+  const handleItemAddedFromForm = async (newItem: BucketListItem) => {
+    // This is called from AddItemForm after successful API call
+    // The real-time update will be handled by WebSocket events
+
+    // Hide the form after successful addition
+    setShowAddForm(false);
+  };
+
+  // Handle adding new item with WebSocket integration
+  const handleAddItemWithWebSocket = async (itemData: {
+    title: string;
+    description?: string;
+  }) => {
+    const currentMemberId = getCurrentMemberId();
+    if (!currentMemberId || !groupId) return;
+
+    const optimisticUpdateId = `add-item-${Date.now()}`;
+
+    // Create optimistic item
+    const optimisticItem: BucketListItem = {
+      id: `temp-${Date.now()}`, // Temporary ID
+      groupId,
+      title: itemData.title,
+      description: itemData.description,
+      completed: false,
+      createdBy: currentMemberId,
+      createdAt: new Date().toISOString(),
+    };
+
+    optimisticUpdatesRef.current.set(optimisticUpdateId, null); // No original to rollback to
+
+    // Optimistic update - immediately add to UI
+    setGroup((prevGroup) => {
+      if (!prevGroup) return prevGroup;
+
+      return {
+        ...prevGroup,
+        items: [optimisticItem, ...prevGroup.items],
+      };
+    });
+
+    try {
+      // Send WebSocket event for real-time updates
+      if (webSocket?.isConnected) {
+        webSocket.addItem({ ...itemData, memberId: currentMemberId });
+      }
+
+      // Call API for persistence
+      const actualItem = await apiService.createItem(groupId, {
+        ...itemData,
+        memberId: currentMemberId,
+      });
+
+      // Replace optimistic item with actual item
       setGroup((prevGroup) => {
         if (!prevGroup) return prevGroup;
 
         const updatedItems = prevGroup.items.map((item) =>
-          item.id === itemId ? updatedItem : item
+          item.id === optimisticItem.id ? actualItem : item
         );
 
         return {
@@ -104,25 +309,29 @@ export const GroupView: React.FC = () => {
           items: updatedItems,
         };
       });
+
+      optimisticUpdatesRef.current.delete(optimisticUpdateId);
+      setShowAddForm(false);
     } catch (error) {
-      console.error("Failed to toggle item completion:", error);
+      console.error("Failed to add item:", error);
+
+      // Rollback optimistic update
+      setGroup((prevGroup) => {
+        if (!prevGroup) return prevGroup;
+
+        const rolledBackItems = prevGroup.items.filter(
+          (item) => item.id !== optimisticItem.id
+        );
+
+        return {
+          ...prevGroup,
+          items: rolledBackItems,
+        };
+      });
+
+      optimisticUpdatesRef.current.delete(optimisticUpdateId);
       throw error;
     }
-  };
-
-  // Handle adding new item
-  const handleItemAdded = (newItem: BucketListItem) => {
-    setGroup((prevGroup) => {
-      if (!prevGroup) return prevGroup;
-
-      return {
-        ...prevGroup,
-        items: [newItem, ...prevGroup.items], // Add new item at the beginning
-      };
-    });
-
-    // Hide the form after successful addition
-    setShowAddForm(false);
   };
 
   console.log(
@@ -249,6 +458,17 @@ export const GroupView: React.FC = () => {
                   <span>
                     Created {new Date(group.createdAt).toLocaleDateString()}
                   </span>
+                  {/* WebSocket Connection Status */}
+                  {webSocket && (
+                    <ConnectionStatus
+                      connectionState={webSocket.connectionState}
+                      isOnline={webSocket.isOnline}
+                      reconnectAttempts={webSocket.reconnectAttempts}
+                      error={webSocket.error}
+                      onReconnect={webSocket.reconnect}
+                      className="text-xs"
+                    />
+                  )}
                 </div>
               </div>
               <button
@@ -259,6 +479,41 @@ export const GroupView: React.FC = () => {
               </button>
             </div>
 
+            {/* WebSocket Error Display */}
+            {wsError && (
+              <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-5 w-5 text-yellow-400"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-yellow-800">
+                      Connection Issue
+                    </h3>
+                    <p className="mt-1 text-sm text-yellow-700">{wsError}</p>
+                    {webSocket && !webSocket.isConnected && (
+                      <button
+                        onClick={webSocket.reconnect}
+                        className="mt-2 text-sm text-yellow-800 underline hover:text-yellow-900"
+                      >
+                        Try to reconnect
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Progress and Countdown Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               {/* Progress Bar */}
@@ -267,7 +522,7 @@ export const GroupView: React.FC = () => {
                   Progress
                 </h3>
                 <ErrorBoundary>
-                  <ProgressBar {...getProgressInfo()} />
+                  <ProgressBar {...progressData} />
                 </ErrorBoundary>
               </div>
 
@@ -379,11 +634,12 @@ export const GroupView: React.FC = () => {
                 {/* Add Item Form */}
                 {showAddForm && getCurrentMemberId() && (
                   <ErrorBoundary>
-                    <AddItemForm
+                    <AddItemFormWithWebSocket
                       groupId={group.id}
                       memberId={getCurrentMemberId()!}
-                      onItemAdded={handleItemAdded}
+                      onItemAdded={handleItemAddedFromForm}
                       onCancel={() => setShowAddForm(false)}
+                      onAddItemWithWebSocket={handleAddItemWithWebSocket}
                     />
                   </ErrorBoundary>
                 )}

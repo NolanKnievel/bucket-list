@@ -5,6 +5,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import { WebSocketProvider } from "./contexts/WebSocketContext";
 import { HomePage } from "./components/HomePage";
 import { Dashboard } from "./components/Dashboard";
 import { CreateGroupPage } from "./components/CreateGroupPage";
@@ -15,37 +16,39 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          {/* Public route - Home page with authentication */}
-          <Route path="/" element={<HomePage />} />
+      <WebSocketProvider>
+        <Router>
+          <Routes>
+            {/* Public route - Home page with authentication */}
+            <Route path="/" element={<HomePage />} />
 
-          {/* Protected routes - require authentication */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/create-group"
-            element={
-              <ProtectedRoute>
-                <CreateGroupPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* Protected routes - require authentication */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/create-group"
+              element={
+                <ProtectedRoute>
+                  <CreateGroupPage />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Public routes - Group access */}
-          <Route path="/groups/:groupId/join" element={<JoinGroupForm />} />
-          <Route path="/groups/:groupId" element={<GroupView />} />
+            {/* Public routes - Group access */}
+            <Route path="/groups/:groupId/join" element={<JoinGroupForm />} />
+            <Route path="/groups/:groupId" element={<GroupView />} />
 
-          {/* Catch all route - redirect to home */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Router>
+            {/* Catch all route - redirect to home */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Router>
+      </WebSocketProvider>
     </AuthProvider>
   );
 }
